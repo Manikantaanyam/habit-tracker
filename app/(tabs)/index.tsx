@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Habit } from "@/types/database.type";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -18,15 +18,18 @@ import {
   View,
 } from "react-native";
 import { Query } from "react-native-appwrite";
+import { Swipeable } from "react-native-gesture-handler";
 
 export default function Index() {
   const [habits, setHabits] = useState<Habit[]>([]);
 
   const { signOut, user } = useAuth();
 
+  const swipableRefs = useRef<{ [key: string]: Swipeable | null }>({});
+
   useEffect(() => {
     if (user) {
-      const channel = `databses.${DATABASE_ID}.collection.${HABITS_COLLECTION_ID}.documents`;
+      const channel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
       const habitsSubscription = client.subscribe(
         channel,
         (response: RealtimeResponse) => {
@@ -75,18 +78,37 @@ export default function Index() {
     }
   };
 
+  const handleDeleteHabit = async (id: string) => {
+    try {
+      await databases.deleteDocument(DATABASE_ID, HABITS_COLLECTION_ID, id);
+    } catch (error) {
+      console.log("Error occured while deleting a habit", error);
+    }
+  };
+
+  const renderLeftActions = () => (
+    <View style={s.swipeActionLeft}>
+      <Ionicons name="trash" size={32} color="#fff" />
+    </View>
+  );
+
+  const renderRightActions = () => (
+    <View style={s.swipeActionRight}>
+      <Ionicons name="checkmark-circle" size={32} color="#fff" />
+    </View>
+  );
+
   return (
-    <ScrollView>
-      <View style={s.container}>
-        <View style={s.header}>
-          <Text style={s.mainHeading}>Today's Habits</Text>
+    <View style={s.container}>
+      <View style={s.header}>
+        <Text style={s.mainHeading}>Today's Habits</Text>
 
-          <TouchableOpacity style={s.signOutBtn} onPress={signOut}>
-            <Ionicons name="log-out" color="#6200ee" size={24} />
-            <Text style={s.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-
+        <TouchableOpacity style={s.signOutBtn} onPress={signOut}>
+          <Ionicons name="log-out" color="#6200ee" size={24} />
+          <Text style={s.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
         {habits?.length === 0 ? (
           <View style={s.noHabits}>
             <Text>No habits yet.</Text>
@@ -99,28 +121,46 @@ export default function Index() {
           </View>
         ) : (
           habits.map((habit, key) => (
-            <View key={key} style={s.cardContent}>
-              <Text style={s.cardTitle}>{habit.title}</Text>
-              <Text style={s.cardDescription}>{habit.description}</Text>
-              <View style={s.cardFooter}>
-                <View style={s.streakBadge}>
-                  <Ionicons name="flame" size={24} color="#ff9800" />
-                  <Text style={s.streakText}>
-                    {habit.streaks_count} day streak
-                  </Text>
-                </View>
-                <View style={s.frequencyBadge}>
-                  <Text style={s.frequencyText}>
-                    {habit.frequency.charAt(0).toUpperCase() +
-                      habit.frequency.slice(1)}
-                  </Text>
+            <Swipeable
+              ref={(ref) => {
+                swipableRefs.current[habit.$id] = ref;
+              }}
+              key={key}
+              overshootLeft={false}
+              overshootRight={false}
+              renderLeftActions={renderLeftActions}
+              renderRightActions={renderRightActions}
+              onSwipeableOpen={(direction) => {
+                if (direction === "left") {
+                  handleDeleteHabit(habit.$id);
+                }
+
+                swipableRefs.current[habit.$id]?.close();
+              }}
+            >
+              <View key={key} style={s.cardContent}>
+                <Text style={s.cardTitle}>{habit.title}</Text>
+                <Text style={s.cardDescription}>{habit.description}</Text>
+                <View style={s.cardFooter}>
+                  <View style={s.streakBadge}>
+                    <Ionicons name="flame" size={24} color="#ff9800" />
+                    <Text style={s.streakText}>
+                      {habit.streaks_count} day streak
+                    </Text>
+                  </View>
+                  <View style={s.frequencyBadge}>
+                    <Text style={s.frequencyText}>
+                      {habit.frequency.charAt(0).toUpperCase() +
+                        habit.frequency.slice(1)}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
+            </Swipeable>
           ))
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -152,7 +192,7 @@ const s = StyleSheet.create({
     backgroundColor: "#e8daf1",
     padding: 12,
     marginBottom: 10,
-    borderRadius: 10,
+    borderRadius: 18,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -197,5 +237,25 @@ const s = StyleSheet.create({
   frequencyText: {
     color: "#7c4dff",
     fontWeight: "bold",
+  },
+  swipeActionLeft: {
+    backgroundColor: "#e53935",
+    justifyContent: "center",
+    paddingLeft: 16,
+    flex: 1,
+    alignItems: "flex-start",
+    borderRadius: 18,
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  swipeActionRight: {
+    backgroundColor: "#4caf50",
+    justifyContent: "center",
+    paddingRight: 16,
+    flex: 1,
+    alignItems: "flex-end",
+    marginBottom: 10,
+    marginTop: 2,
+    borderRadius: 18,
   },
 });
