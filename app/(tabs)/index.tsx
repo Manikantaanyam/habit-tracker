@@ -3,10 +3,11 @@ import {
   DATABASE_ID,
   databases,
   HABITS_COLLECTION_ID,
+  HABITS_COMPLETIONS_ID,
   RealtimeResponse,
 } from "@/lib/appwrite";
 import { useAuth } from "@/lib/auth-context";
-import { Habit } from "@/types/database.type";
+import { Habit, HabitCompletion } from "@/types/database.type";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -17,11 +18,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Query } from "react-native-appwrite";
+import { ID, Query } from "react-native-appwrite";
 import { Swipeable } from "react-native-gesture-handler";
 
 export default function Index() {
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [completedHabits, setCompletedHabits] = useState<string[]>([]);
 
   const { signOut, user } = useAuth();
 
@@ -29,9 +31,9 @@ export default function Index() {
 
   useEffect(() => {
     if (user) {
-      const channel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
+      const habitsChannel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
       const habitsSubscription = client.subscribe(
-        channel,
+        habitsChannel,
         (response: RealtimeResponse) => {
           if (
             response.events.includes(
@@ -55,10 +57,26 @@ export default function Index() {
         },
       );
 
+      const habitsCompletionChannel = `databases.${DATABASE_ID}.collections.${HABITS_COMPLETIONS_ID}.documents`;
+      const habitsCompletionSubscription = client.subscribe(
+        habitsCompletionChannel,
+        (response: RealtimeResponse) => {
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.create",
+            )
+          ) {
+            fetchTodayCompletions();
+          }
+        },
+      );
+
       fetchHabits();
+      fetchTodayCompletions();
 
       return () => {
         habitsSubscription();
+        habitsCompletionSubscription();
       };
     }
   }, [user]);
@@ -78,9 +96,57 @@ export default function Index() {
     }
   };
 
+  const fetchTodayCompletions = async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    try {
+      const response = await databases.listDocuments<HabitCompletion>(
+        DATABASE_ID,
+        HABITS_COMPLETIONS_ID,
+        [
+          Query.equal("user_id", user?.$id ?? ""),
+          Query.greaterThanEqual("completed_At", today.toISOString()),
+        ],
+      );
+
+      const completions = response.documents;
+      setCompletedHabits(completions.map((c) => c.habit_id));
+      console.log("Today completions", completedHabits);
+    } catch (error) {
+      console.log("Error occured", error);
+    }
+  };
+
   const handleDeleteHabit = async (id: string) => {
     try {
       await databases.deleteDocument(DATABASE_ID, HABITS_COLLECTION_ID, id);
+    } catch (error) {
+      console.log("Error occured while deleting a habit", error);
+    }
+  };
+
+  const handleCompleteHabit = async (id: string) => {
+    if (!user || completedHabits.includes(id)) return;
+    try {
+      const currentDate = new Date().toISOString();
+      await databases.createDocument(
+        DATABASE_ID,
+        HABITS_COMPLETIONS_ID,
+        ID.unique(),
+        {
+          user_id: user?.$id,
+          habit_id: id,
+          completed_At: currentDate,
+        },
+      );
+
+      const habit = habits.find((h) => h.$id === id);
+      if (!habit) return;
+
+      await databases.updateDocument(DATABASE_ID, HABITS_COLLECTION_ID, id, {
+        streaks_count: habit.streaks_count + 1,
+        last_completed: currentDate,
+      });
     } catch (error) {
       console.log("Error occured while deleting a habit", error);
     }
@@ -92,9 +158,16 @@ export default function Index() {
     </View>
   );
 
-  const renderRightActions = () => (
+  const isHabitCompleted = (habitId: string) =>
+    completedHabits.includes(habitId);
+
+  const renderRightActions = (habitId: string) => (
     <View style={s.swipeActionRight}>
-      <Ionicons name="checkmark-circle" size={32} color="#fff" />
+      {isHabitCompleted(habitId) ? (
+        <Text style={{color: "#fff"}}>Completed!</Text>
+      ) : (
+        <Ionicons name="checkmark-circle" size={32} color="#fff" />
+      )}
     </View>
   );
 
@@ -129,16 +202,24 @@ export default function Index() {
               overshootLeft={false}
               overshootRight={false}
               renderLeftActions={renderLeftActions}
-              renderRightActions={renderRightActions}
+              renderRightActions={() => renderRightActions(habit.$id)}
               onSwipeableOpen={(direction) => {
                 if (direction === "left") {
                   handleDeleteHabit(habit.$id);
+                } else if (direction === "right") {
+                  handleCompleteHabit(habit.$id);
                 }
 
                 swipableRefs.current[habit.$id]?.close();
               }}
             >
-              <View key={key} style={s.cardContent}>
+              <View
+                key={key}
+                style={[
+                  s.cardContent,
+                  isHabitCompleted(habit.$id) && s.cardCompletedStyle,
+                ]}
+              >
                 <Text style={s.cardTitle}>{habit.title}</Text>
                 <Text style={s.cardDescription}>{habit.description}</Text>
                 <View style={s.cardFooter}>
@@ -246,7 +327,6 @@ const s = StyleSheet.create({
     alignItems: "flex-start",
     borderRadius: 18,
     marginBottom: 10,
-    marginTop: 2,
   },
   swipeActionRight: {
     backgroundColor: "#4caf50",
@@ -255,7 +335,9 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: "flex-end",
     marginBottom: 10,
-    marginTop: 2,
     borderRadius: 18,
+  },
+  cardCompletedStyle: {
+    opacity: 0.6,
   },
 });
