@@ -74,7 +74,7 @@ export default function AuthScreen() {
 
         <TextInput
           placeholder="Your Password..."
-          keyboardType="email-address"
+          keyboardType="visible-password"
           style={s.input}
           secureTextEntry
           onChangeText={setPassword}
@@ -83,13 +83,17 @@ export default function AuthScreen() {
         {error && <Text style={s.error}>{error}</Text>}
 
         <TouchableOpacity style={s.button} onPress={handleAuth}>
-          {isSignUp ? "Sign Up" : "Sign In"}
+          <Text style={{ textAlign: "center", color: "#fff" }}>
+            {isSignUp ? "Sign Up" : "Sign In"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={s.ghostButton} onPress={handleSwitchMode}>
-          {isSignUp
-            ? "Already have an account ? Sign In"
-            : "Dont't have an account ? Sign Up"}
+          <Text style={{ textAlign: "center" }}>
+            {isSignUp
+              ? "Already have an account ? Sign In"
+              : "Dont't have an account ? Sign Up"}
+          </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

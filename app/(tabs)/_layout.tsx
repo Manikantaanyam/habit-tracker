@@ -1,25 +1,49 @@
 import { Tabs } from "expo-router";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Entypo from "@expo/vector-icons/Entypo";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function RootLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: "coral" }}>
+    <Tabs
+      screenOptions={{
+        headerStyle: { backgroundColor: "#f5f5f5" },
+        headerShadowVisible: false,
+        tabBarStyle: {
+          backgroundColor: "#f5f5f5",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarActiveTintColor: "#6200ee",
+        tabBarInactiveTintColor: "#666666",
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome name="home" size={24} color={color} />
+          title: "Today's Habits",
+          tabBarIcon: ({ size, color }) => (
+            <Ionicons name="calendar" color={color} size={size} />
           ),
         }}
       />
+
       <Tabs.Screen
-        name="login"
+        name="streaks"
         options={{
-          title: "Login",
-          tabBarIcon: ({ color }) => (
-            <Entypo name="login" size={24} color={color} />
+          title: "Streaks",
+          tabBarIcon: ({ size, color }) => (
+            <Ionicons name="stats-chart" color={color} size={size} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="add-habit"
+        options={{
+          title: "Add Habit",
+          tabBarIcon: ({ size, color }) => (
+            <Ionicons name="add-circle" color={color} size={size} />
           ),
         }}
       />

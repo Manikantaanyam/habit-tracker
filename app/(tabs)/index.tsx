@@ -11,16 +11,10 @@ export default function Index() {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#000",
+        backgroundColor: "#f5f5f5",
       }}
     >
-      <Text style={{ color: "#fff" }}>
-        Edit app/index.tsx to edit this screen.
-      </Text>
-
-      <Link style={{ color: "#fff" }} href="/login">
-        Go to Login Screen
-      </Link>
+      <Link href="/login">Go to Login Screen</Link>
 
       <TouchableOpacity
         onPress={signOut}
