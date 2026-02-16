@@ -1,25 +1,72 @@
 import {
+  client,
   DATABASE_ID,
   databases,
   HABITS_COLLECTION_ID,
   HABITS_COMPLETIONS_ID,
+  RealtimeResponse,
 } from "@/lib/appwrite";
 import { useAuth } from "@/lib/auth-context";
 import { Habit, HabitCompletion } from "@/types/database.type";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Query } from "react-native-appwrite";
+import { ScrollView } from "react-native-gesture-handler";
 
 export default function StreaksScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completedHabits, setCompletedHabits] = useState<HabitCompletion[]>([]);
 
-  const { signOut, user } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (user) {
+      const habitsChannel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
+      const habitsSubscription = client.subscribe(
+        habitsChannel,
+        (response: RealtimeResponse) => {
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.create",
+            )
+          ) {
+            fetchHabits();
+          } else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.update",
+            )
+          ) {
+            fetchHabits();
+          } else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.delete",
+            )
+          ) {
+            fetchHabits();
+          }
+        },
+      );
+
+      const habitsCompletionChannel = `databases.${DATABASE_ID}.collections.${HABITS_COMPLETIONS_ID}.documents`;
+      const habitsCompletionSubscription = client.subscribe(
+        habitsCompletionChannel,
+        (response: RealtimeResponse) => {
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.create",
+            )
+          ) {
+            fetchCompletions();
+          }
+        },
+      );
       fetchHabits();
       fetchCompletions();
+
+      return () => {
+        habitsSubscription();
+        habitsCompletionSubscription();
+      };
     }
   }, [user]);
 
@@ -92,12 +139,13 @@ export default function StreaksScreen() {
           currentStreak = 1;
         }
       } else {
-        if (currentStreak > bestStreak) {
-          bestStreak = currentStreak;
-        }
-        streak = currentStreak;
-        lastDate = date;
+        currentStreak = 1;
       }
+      if (currentStreak > bestStreak) {
+        bestStreak = currentStreak;
+      }
+      streak = currentStreak;
+      lastDate = date;
     });
 
     return { streak, bestStreak, total };
@@ -108,45 +156,64 @@ export default function StreaksScreen() {
     return { habit, bestStreak, streak, total };
   });
 
-  const rankedHabits = habitStreaks.sort((a, b) => a.bestStreak - b.bestStreak);
+  const rankedHabits = habitStreaks.sort((a, b) => b.bestStreak - a.bestStreak);
   console.log(
     "rankeddddddddddddddddddd",
     rankedHabits.map((h) => h.habit.title),
   );
+
+  const badgeStyles = [s.badge1, s.badge2, s.badge3];
   return (
     <View style={s.container}>
       <Text style={s.mainHeading}>Habits Streaks</Text>
+
+      {rankedHabits.length > 0 && (
+        <View style={s.rankingContainer}>
+          <Text style={s.rankingTitle}>🏅 Top Streaks</Text>
+          {rankedHabits.slice(0, 3).map((item, key) => (
+            <View key={key} style={s.rankingRow}>
+              <View style={[s.rankingBadge, badgeStyles[key]]}>
+                <Text style={s.rankingBadgeText}>{key + 1}</Text>
+              </View>
+              <Text style={s.rankingHabit}>{item.habit.title}</Text>
+              <Text style={s.rankingStreak}>{item.bestStreak}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {habits.length === 0 ? (
         <View>
           <Text>No Habits yet. Add your first Habit!</Text>
         </View>
       ) : (
-        rankedHabits.map(({ bestStreak, habit, streak, total }, key) => (
-          <View style={[s.card, key === 0 && s.firstCard]} key={key}>
-            <View style={s.cardContent}>
-              <View>
-                <Text style={s.habitTitle}>{habit.title}</Text>
-                <Text style={s.habitDesc}>{habit.description}</Text>
-              </View>
+        <ScrollView>
+          {rankedHabits.map(({ bestStreak, habit, streak, total }, key) => (
+            <View style={[s.card, key === 0 && s.firstCard]} key={key}>
+              <View style={s.cardContent}>
+                <View>
+                  <Text style={s.habitTitle}>{habit.title}</Text>
+                  <Text style={s.habitDesc}>{habit.description}</Text>
+                </View>
 
-              <View style={s.statsRow}>
-                <View style={s.statsBadge}>
-                  <Text style={s.statsBadgeText}> 🔥{streak}</Text>
-                  <Text style={s.statsBadgeLabel}> Current</Text>
-                </View>
-                <View style={s.statsBadgeGold}>
-                  <Text style={s.statsBadgeText}> 🏆 {bestStreak}</Text>
-                  <Text style={s.statsBadgeLabel}> Best</Text>
-                </View>
-                <View style={s.statsBadgeGreen}>
-                  <Text style={s.statsBadgeText}> ✅ {total}</Text>
-                  <Text style={s.statsBadgeLabel}> Total</Text>
+                <View style={s.statsRow}>
+                  <View style={s.statsBadge}>
+                    <Text style={s.statsBadgeText}> 🔥 {streak}</Text>
+                    <Text style={s.statsBadgeLabel}> Current</Text>
+                  </View>
+                  <View style={s.statsBadgeGold}>
+                    <Text style={s.statsBadgeText}> 🏆 {bestStreak}</Text>
+                    <Text style={s.statsBadgeLabel}> Best</Text>
+                  </View>
+                  <View style={s.statsBadgeGreen}>
+                    <Text style={s.statsBadgeText}> ✅ {total}</Text>
+                    <Text style={s.statsBadgeLabel}> Total</Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
-        ))
+          ))}
+        </ScrollView>
       )}
     </View>
   );
@@ -232,5 +299,69 @@ const s = StyleSheet.create({
     color: "#888",
     marginTop: 2,
     fontWeight: "500",
+  },
+  rankingContainer: {
+    marginBottom: 24,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    elevation: 2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  rankingTitle: {
+    fontWeight: "bold",
+    fontSize: 18,
+    marginBottom: 12,
+    color: "#7c4dff",
+    letterSpacing: 0.5,
+  },
+  rankingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    padding: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  rankingBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    backgroundColor: "#e0e0e0",
+  },
+  badge1: {
+    backgroundColor: "#ffd700",
+    borderRadius: 999,
+  },
+  badge2: {
+    backgroundColor: "#c0c0c0",
+    borderRadius: 999,
+  },
+  badge3: {
+    backgroundColor: "#cd7f32",
+    borderRadius: 999,
+  },
+  rankingBadgeText: {
+    fontWeight: "bold",
+    color: "#fff",
+    fontSize: 15,
+  },
+  rankingHabit: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    fontWeight: "600",
+  },
+  rankingStreak: {
+    fontSize: 14,
+    color: "#7c4dff",
+    fontWeight: "bold",
   },
 });
