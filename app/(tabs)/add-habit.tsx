@@ -1,3 +1,6 @@
+import { DATABASE_ID, databases, HABITS_COLLECTION_ID } from "@/lib/appwrite";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   StyleSheet,
@@ -6,12 +9,46 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ID } from "react-native-appwrite";
 
 const FREQUENCIES = ["daily", "weekly", "monthly"];
 export default function AddHabitScreen() {
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [freqeuncy, setFrequency] = useState<string>("daily");
+  const [frequency, setFrequency] = useState<string>("daily");
+  const [error, setError] = useState<string>("");
+
+  const { user } = useAuth();
+
+  const router = useRouter();
+
+  const handleSubmit = async () => {
+    try {
+      if (!user) return;
+
+      await databases.createDocument(
+        DATABASE_ID,
+        HABITS_COLLECTION_ID,
+        ID.unique(),
+        {
+          title,
+          description,
+          frequency,
+          streaks_count: 0,
+          last_completed: new Date().toISOString(),
+          $createdAt: new Date().toISOString(),
+        },
+      );
+
+      router.back();
+    } catch (error) {
+      if (error instanceof Error) {
+        return setError(error.message);
+      }
+
+      setError("There was an error occured while creating an habit");
+    }
+  };
 
   return (
     <View style={s.container}>
@@ -29,6 +66,7 @@ export default function AddHabitScreen() {
             style={[
               s.freqButton,
               index !== FREQUENCIES.length - 1 && s.divider,
+              frequency === freq && s.selectedButton,
             ]}
             onPress={() => setFrequency(freq)}
           >
@@ -37,9 +75,15 @@ export default function AddHabitScreen() {
         ))}
       </View>
 
-      <TouchableOpacity style={s.addHabitBtn}>
+      <TouchableOpacity
+        style={s.addHabitBtn}
+        disabled={!title || !description}
+        onPress={handleSubmit}
+      >
         <Text style={s.addHabitBtnText}>Add Habit</Text>
       </TouchableOpacity>
+
+      {error && <Text style={s.errorMsg}>{error}</Text>}
     </View>
   );
 }
@@ -66,12 +110,16 @@ const s = StyleSheet.create({
     borderWidth: 1,
     marginTop: 20,
     borderRadius: 999,
+    overflow: "hidden",
   },
   freqButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
+  },
+  selectedButton: {
+    backgroundColor: "#C399FF",
   },
   divider: {
     borderRightWidth: 1,
@@ -90,5 +138,10 @@ const s = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.5,
     fontSize: 16,
+  },
+
+  errorMsg: {
+    color: "#ed0000",
+    textAlign: "center",
   },
 });
