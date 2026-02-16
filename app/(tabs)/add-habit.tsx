@@ -31,6 +31,7 @@ export default function AddHabitScreen() {
         HABITS_COLLECTION_ID,
         ID.unique(),
         {
+          user_id: user.$id,
           title,
           description,
           frequency,
